@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR Code Decryption</title>
-    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.js"></script>
+    <title>Debug QR Scanner</title>
     <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
     <style>
         body {
@@ -16,6 +15,7 @@
             width: 300px;
             margin: 10px auto;
             display: block;
+            border: 1px solid black;
         }
         canvas {
             display: none;
@@ -25,119 +25,71 @@
             font-size: 1.2em;
             color: #333;
         }
-        button {
-            margin: 10px;
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-        }
     </style>
 </head>
 <body>
-    <h1>QR Code Decryption</h1>
+    <h1>Debug QR Scanner</h1>
     <video id="video" autoplay playsinline></video>
     <canvas id="canvas"></canvas>
-    <button id="toggleCamera">Turn Camera On</button>
-    <p>Decrypted Data: <span id="decryptedData">No QR code detected yet</span></p>
+    <p id="status">Status: Initializing...</p>
+    <p>Scanned QR Code Data: <span id="scannedData">No QR code detected yet</span></p>
 
     <script>
-        const key = CryptoJS.enc.Utf8.parse("shrunk4life12345");
         const video = document.getElementById("video");
         const canvas = document.getElementById("canvas");
-        const ctx = canvas.getContext("2d", { willReadFrequently: true }); // Optimize for frequent readbacks
-        const toggleButton = document.getElementById("toggleCamera");
-        const resultElement = document.getElementById("decryptedData");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true }); // Optimized for frequent reads
+        const statusElement = document.getElementById("status");
+        const scannedDataElement = document.getElementById("scannedData");
         let videoStream = null;
-        let scanInterval = null;
 
-        // AES decryption function
-        function decryptData(encryptedData, key) {
-            try {
-                const bytes = CryptoJS.AES.decrypt(encryptedData, key, {
-                    mode: CryptoJS.mode.ECB,
-                    padding: CryptoJS.pad.Pkcs7,
-                });
-                return bytes.toString(CryptoJS.enc.Utf8);
-            } catch (error) {
-                console.error("Decryption error:", error);
-                return "Invalid decryption key or corrupted data.";
-            }
-        }
-
-        // QR code decoding
-        function decodeQRCode(imageData) {
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-            if (code) {
-                console.log("QR code detected:", code.data);
-            } else {
-                console.log("No QR code detected.");
-            }
-            return code ? code.data : null;
-        }
-
-        // Start the video stream
         async function startVideo() {
-            if (videoStream) return; // Prevent restarting if already active
             try {
+                statusElement.textContent = "Requesting camera access...";
                 videoStream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: "environment",
-                        width: { ideal: 1280 }, // Higher resolution
-                        height: { ideal: 720 }, // Higher resolution
-                    },
+                    video: { facingMode: "environment" },
                 });
                 video.srcObject = videoStream;
-
                 video.addEventListener("play", () => {
-                    console.log("Video stream started.");
-                    scanInterval = setInterval(() => {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                        const encryptedData = decodeQRCode(imageData);
-
-                        if (encryptedData) {
-                            clearInterval(scanInterval);
-                            const decryptedData = decryptData(encryptedData, key);
-                            resultElement.textContent = decryptedData;
-
-                            // Stop the video stream after detecting a QR code
-                            stopVideo();
-                        }
-                    }, 500);
+                    statusElement.textContent = "Camera access granted. Scanning for QR codes...";
+                    scanQRCode();
                 });
-                toggleButton.textContent = "Turn Camera Off";
             } catch (err) {
                 console.error("Error accessing video stream:", err);
+                statusElement.textContent = "Error accessing camera: " + err.message;
             }
         }
 
-        // Stop the video stream
-        function stopVideo() {
-            if (videoStream) {
-                videoStream.getTracks().forEach(track => track.stop());
-                videoStream = null;
-            }
-            if (scanInterval) {
-                clearInterval(scanInterval);
-                scanInterval = null;
-            }
-            toggleButton.textContent = "Turn Camera On";
-            console.log("Video stream stopped.");
+        function scanQRCode() {
+            const scanInterval = setInterval(() => {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                    if (code) {
+                        console.log("QR Code Detected:", code.data);
+                        scannedDataElement.textContent = code.data;
+                        statusElement.textContent = "QR Code detected successfully!";
+                        clearInterval(scanInterval); // Stop scanning after detection
+                    } else {
+                        console.log("No QR Code detected in this frame.");
+                        statusElement.textContent = "Scanning for QR codes...";
+                    }
+                } else {
+                    console.log("Video not ready for scanning.");
+                    statusElement.textContent = "Waiting for video feed...";
+                }
+            }, 500);
         }
 
-        // Toggle camera on/off
-        toggleButton.addEventListener("click", () => {
-            if (videoStream) {
-                stopVideo();
-            } else {
-                startVideo();
-            }
-        });
+        // Start the QR scanner on page load
+        startVideo();
     </script>
 </body>
 </html>
+
 
 
