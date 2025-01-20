@@ -17,41 +17,36 @@
             margin: 10px auto;
             display: block;
         }
-        input {
-            margin-top: 10px;
+        canvas {
+            display: none;
         }
         #result {
             margin-top: 20px;
             font-size: 1.2em;
+            color: #333;
         }
     </style>
 </head>
 <body>
     <h1>QR Code Decryption</h1>
-
-    <!-- Video for live scanning -->
     <video id="video" autoplay playsinline></video>
-
-    <p>or</p>
-
-    <!-- File upload for QR code image -->
-    <input type="file" id="fileInput" accept="image/*">
-
-    <div id="result">Decrypted Data: <span id="decryptedData"></span></div>
+    <canvas id="canvas"></canvas>
+    <p>Decrypted Data: <span id="decryptedData">No QR code detected yet</span></p>
 
     <script>
-        const key = CryptoJS.enc.Utf8.parse("shrunk4life12345"); // Use the same key as in encryption
+        const key = CryptoJS.enc.Utf8.parse("shrunk4life12345");
         const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
         const resultElement = document.getElementById("decryptedData");
-        const fileInput = document.getElementById("fileInput");
         let videoStream = null;
 
-        // AES decryption function (ECB mode)
+        // AES decryption function
         function decryptData(encryptedData, key) {
             try {
                 const bytes = CryptoJS.AES.decrypt(encryptedData, key, {
                     mode: CryptoJS.mode.ECB,
-                    padding: CryptoJS.pad.Pkcs7
+                    padding: CryptoJS.pad.Pkcs7,
                 });
                 return bytes.toString(CryptoJS.enc.Utf8);
             } catch (error) {
@@ -60,23 +55,18 @@
             }
         }
 
-        // Decode QR code from video frame
+        // QR code decoding
         function decodeQRCode(imageData) {
             const code = jsQR(imageData.data, imageData.width, imageData.height);
+            if (code) {
+                console.log("QR code detected:", code.data);
+            } else {
+                console.log("No QR code detected.");
+            }
             return code ? code.data : null;
         }
 
-        // Validate if the decrypted string is a URL
-        function isValidURL(string) {
-            try {
-                new URL(string);
-                return true;
-            } catch (_) {
-                return false;
-            }
-        }
-
-        // Start video for live QR code scanning
+        // Start the video stream
         async function startVideo() {
             if (videoStream) {
                 videoStream.getTracks().forEach(track => track.stop());
@@ -85,28 +75,23 @@
                 videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
                 video.srcObject = videoStream;
 
-                const canvas = document.createElement("canvas");
-                const ctx = canvas.getContext("2d");
-
                 video.addEventListener("play", () => {
+                    console.log("Video stream started.");
                     const scanInterval = setInterval(() => {
                         canvas.width = video.videoWidth;
                         canvas.height = video.videoHeight;
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         const encryptedData = decodeQRCode(imageData);
+
                         if (encryptedData) {
                             clearInterval(scanInterval);
 
                             const decryptedData = decryptData(encryptedData, key);
                             resultElement.textContent = decryptedData;
 
-                            if (isValidURL(decryptedData)) {
-                                window.location.href = decryptedData;
-                            }
-
-                            // Stop video stream after successful scan
+                            // Stop the video stream
                             videoStream.getTracks().forEach(track => track.stop());
                         }
                     }, 500);
@@ -116,42 +101,9 @@
             }
         }
 
-        // Handle QR code image upload
-        fileInput.addEventListener("change", (event) => {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvas = document.createElement("canvas");
-                        const ctx = canvas.getContext("2d");
-
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        ctx.drawImage(img, 0, 0);
-                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-                        const encryptedData = decodeQRCode(imageData);
-                        if (encryptedData) {
-                            const decryptedData = decryptData(encryptedData, key);
-                            resultElement.textContent = decryptedData;
-
-                            if (isValidURL(decryptedData)) {
-                                window.location.href = decryptedData;
-                            }
-                        } else {
-                            resultElement.textContent = "No QR code found.";
-                        }
-                    };
-                    img.src = reader.result;
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-
-        // Start live QR code scanning
+        // Start scanning
         startVideo();
     </script>
 </body>
 </html>
+
