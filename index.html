@@ -69,6 +69,8 @@
             const code = jsQR(imageData.data, imageData.width, imageData.height);
             if (code) {
                 console.log("QR code detected:", code.data);
+            } else {
+                console.log("No QR code detected.");
             }
             return code ? code.data : null;
         }
@@ -77,7 +79,13 @@
         async function startVideo() {
             if (videoStream) return; // Prevent restarting if already active
             try {
-                videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: "environment",
+                        width: { ideal: 1280 }, // Higher resolution
+                        height: { ideal: 720 }, // Higher resolution
+                    },
+                });
                 video.srcObject = videoStream;
 
                 video.addEventListener("play", () => {
